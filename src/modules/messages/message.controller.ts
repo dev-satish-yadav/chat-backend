@@ -21,7 +21,7 @@ export class MessageController {
   static async getMessages(req: Request, res: Response, next: NextFunction) {
     try {
       const chatId = String(req.params.chatId);
-      const limit = typeof req.query.limit === "number" ? req.query.limit : (req.query.limit ? parseInt(String(req.query.limit), 10) : 30);
+      const limit = typeof req.query.limit === "number" ? req.query.limit : (req.query.limit ? parseInt(String(req.query.limit), 10) : 50);
       const before = req.query.before as string | undefined;
 
       const messages = await MessageService.getMessages(
@@ -57,6 +57,25 @@ export class MessageController {
       const chatId = String(req.params.chatId);
       const receipts = await MessageService.getReadReceipts(chatId, req.user!.userId);
       res.json(receipts);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // 5. POST /chat/:chatId/lastseen
+  static async updateLastSeen(req: Request, res: Response, next: NextFunction) {
+    try {
+      const chatId = String(req.params.chatId);
+      const userId = (req.body.userId as string) || req.user?.userId;
+      const { messageId } = req.body;
+
+      if (!userId) {
+        res.status(400).json({ error: "ValidationError", message: "userId is required." });
+        return;
+      }
+
+      const result = await MessageService.updateLastSeen(chatId, userId, messageId);
+      res.status(200).json(result);
     } catch (error) {
       next(error);
     }

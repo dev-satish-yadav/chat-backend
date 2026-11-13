@@ -108,6 +108,14 @@ export const swaggerSpec = {
           lastReadMessageId: { type: "string", example: "msg_firestore_id_123" },
         },
       },
+      UpdateLastSeenInput: {
+        type: "object",
+        required: ["userId", "messageId"],
+        properties: {
+          userId: { type: "string", format: "uuid", example: "e31fde0b-26b6-40fe-992d-350dbebe4986" },
+          messageId: { type: "string", example: "msg_firestore_id_123" },
+        },
+      },
       PresenceInput: {
         type: "object",
         properties: {
@@ -378,8 +386,8 @@ export const swaggerSpec = {
             name: "limit",
             in: "query",
             required: false,
-            schema: { type: "integer", minimum: 1, maximum: 100, default: 30 },
-            description: "Maximum number of messages to return (between 1 and 100, default: 30)",
+            schema: { type: "integer", minimum: 1, maximum: 100, default: 50 },
+            description: "Maximum number of messages to return (between 1 and 100, default: 50)",
           },
           {
             name: "before",
@@ -455,6 +463,51 @@ export const swaggerSpec = {
           400: { description: "Invalid UUID format" },
           403: { description: "Access denied" },
           404: { description: "Chat not found" },
+        },
+      },
+    },
+    "/api/chats/{chatId}/lastseen": {
+      post: {
+        summary: "Update Last Seen Message",
+        description: "Updates the last seen message per user in Firestore and synchronizes with PostgreSQL ChatParticipant.",
+        tags: ["Messages"],
+        parameters: [
+          {
+            name: "chatId",
+            in: "path",
+            required: true,
+            schema: { type: "string", format: "uuid" },
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/UpdateLastSeenInput" },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: "Last seen message updated successfully in Firestore & PostgreSQL",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    success: { type: "boolean", example: true },
+                    chatId: { type: "string", format: "uuid" },
+                    userId: { type: "string", format: "uuid" },
+                    messageId: { type: "string" },
+                    updatedAt: { type: "string", format: "date-time" },
+                  },
+                },
+              },
+            },
+          },
+          400: { description: "Invalid UUID or missing fields" },
+          403: { description: "User is not a participant in this chat" },
+          404: { description: "Chat, user, or target message not found" },
         },
       },
     },

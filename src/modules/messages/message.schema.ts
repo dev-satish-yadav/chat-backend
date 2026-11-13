@@ -20,7 +20,7 @@ export const getMessagesQuerySchema = z.object({
   limit: z
     .string()
     .optional()
-    .transform((val) => (val ? parseInt(val, 10) : 30))
+    .transform((val) => (val ? parseInt(val, 10) : 50))
     .refine((val) => !isNaN(val) && val >= 1 && val <= 100, {
       message: "Limit must be an integer between 1 and 100.",
     }),

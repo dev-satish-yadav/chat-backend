@@ -113,7 +113,7 @@ export class MessageService {
   static async getMessages(
     chatId: string,
     userId: string,
-    limitCount: number = 30,
+    limitCount: number = 50,
     beforeTimestamp?: string
   ) {
     await this.assertParticipant(chatId, userId);
@@ -151,7 +151,8 @@ export class MessageService {
         id: doc.id,
         chatId: data.chatId,
         senderId: data.senderId,
-        content: data.content,
+        text: data.text || data.content,
+        content: data.content || data.text,
         type: data.type,
         createdAt,
         updatedAt,
@@ -252,5 +253,70 @@ export class MessageService {
         lastReadAt: data.lastReadAt instanceof Timestamp ? data.lastReadAt.toDate().toISOString() : data.lastReadAt,
       };
     });
+  }
+
+  /**
+   * 5. Update Last Seen Message
+   * Input: chatId, userId, messageId
+   * Updates last seen message per user in Firestore and synchronizes with PostgreSQL ChatParticipant
+   */
+  static async updateLastSeen(chatId: string, userId: string, messageId: string) {
+    await this.assertParticipant(chatId, userId);
+
+    const firestore = getFirestore();
+    const cleanMessageId = messageId.trim();
+
+    // Verify the target message exists in this chat's Firestore collection
+    const messageDocRef = firestore
+      .collection("chats")
+      .doc(chatId)
+      .collection("messages")
+      .doc(cleanMessageId);
+
+    const messageDoc = await messageDocRef.get();
+    if (!messageDoc.exists) {
+      throw new NotFoundError(`Message with ID '${cleanMessageId}' was not found in chat '${chatId}'.`);
+    }
+
+    const now = Timestamp.now();
+
+    // 1. Update last seen record in Firestore per user
+    const lastSeenDocRef = firestore
+      .collection("chats")
+      .doc(chatId)
+      .collection("lastSeen")
+      .doc(userId);
+
+    await lastSeenDocRef.set(
+      {
+        userId,
+        chatId,
+        messageId: cleanMessageId,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    // 2. Synchronize with PostgreSQL ChatParticipant
+    await prisma.chatParticipant.update({
+      where: {
+        chatId_userId: {
+          chatId,
+          userId,
+        },
+      },
+      data: {
+        lastReadMessageId: cleanMessageId,
+        lastReadAt: new Date(),
+      },
+    });
+
+    return {
+      success: true,
+      chatId,
+      userId,
+      messageId: cleanMessageId,
+      updatedAt: now.toDate().toISOString(),
+    };
   }
 }

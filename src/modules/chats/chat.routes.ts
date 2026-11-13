@@ -4,7 +4,7 @@ import { validateBody, validateParams, validateQuery } from "../../middlewares/v
 import { MessageController } from "../messages/message.controller.js";
 import { getMessagesQuerySchema, markReadSchema, sendMessageSchema } from "../messages/message.schema.js";
 import { ChatController } from "./chat.controller.js";
-import { chatIdParamSchema, createChatSchema } from "./chat.schema.js";
+import { chatIdParamSchema, createChatSchema, updateLastSeenBodySchema } from "./chat.schema.js";
 
 export const chatRouter = Router();
 
@@ -60,4 +60,12 @@ chatRouter.get(
   "/:chatId/read-receipts",
   validateParams(chatIdParamSchema),
   MessageController.getReadReceipts
+);
+
+//Update Last Seen Message: POST /chat/:chatId/lastseen
+chatRouter.post(
+  "/:chatId/lastseen",
+  validateParams(chatIdParamSchema),
+  validateBody(updateLastSeenBodySchema),
+  MessageController.updateLastSeen
 );
