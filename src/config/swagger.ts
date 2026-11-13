@@ -116,6 +116,13 @@ export const swaggerSpec = {
           messageId: { type: "string", example: "msg_firestore_id_123" },
         },
       },
+      MarkMessageReadInput: {
+        type: "object",
+        required: ["userId"],
+        properties: {
+          userId: { type: "string", format: "uuid", example: "e31fde0b-26b6-40fe-992d-350dbebe4986" },
+        },
+      },
       PresenceInput: {
         type: "object",
         properties: {
@@ -416,6 +423,58 @@ export const swaggerSpec = {
         },
       },
     },
+    "/api/chats/{chatId}/message/{messageId}/read": {
+      post: {
+        summary: "4. Mark Message Read",
+        description: "Marks a specific message as read by updating Firestore message readBy map, the readReceipts subcollection, and PostgreSQL ChatParticipant.",
+        tags: ["Messages"],
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          {
+            name: "chatId",
+            in: "path",
+            required: true,
+            schema: { type: "string", format: "uuid" },
+          },
+          {
+            name: "messageId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/MarkMessageReadInput" },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: "Read receipt updated successfully",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    success: { type: "boolean", example: true },
+                    chatId: { type: "string", format: "uuid" },
+                    messageId: { type: "string" },
+                    userId: { type: "string", format: "uuid" },
+                    readAt: { type: "string", format: "date-time" },
+                  },
+                },
+              },
+            },
+          },
+          400: { description: "Invalid UUID or missing fields" },
+          403: { description: "User is not a participant in this chat" },
+          404: { description: "Chat, user, or target message not found in this chat" },
+        },
+      },
+    },
     "/api/chats/{chatId}/read": {
       post: {
         summary: "Mark messages as read (updates Firestore read receipt and PostgreSQL participant)",
@@ -471,6 +530,7 @@ export const swaggerSpec = {
         summary: "Update Last Seen Message",
         description: "Updates the last seen message per user in Firestore and synchronizes with PostgreSQL ChatParticipant.",
         tags: ["Messages"],
+        security: [{ BearerAuth: [] }],
         parameters: [
           {
             name: "chatId",

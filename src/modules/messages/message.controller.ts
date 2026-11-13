@@ -52,6 +52,25 @@ export class MessageController {
     }
   }
 
+  // 4. POST /api/chats/:chatId/message/:messageId/read
+  static async markMessageRead(req: Request, res: Response, next: NextFunction) {
+    try {
+      const chatId = String(req.params.chatId);
+      const messageId = String(req.params.messageId);
+      const userId = (req.body.userId as string) || req.user?.userId;
+
+      if (!userId) {
+        res.status(400).json({ error: "ValidationError", message: "userId is required." });
+        return;
+      }
+
+      const result = await MessageService.markMessageRead(chatId, messageId, userId);
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
   static async getReadReceipts(req: Request, res: Response, next: NextFunction) {
     try {
       const chatId = String(req.params.chatId);

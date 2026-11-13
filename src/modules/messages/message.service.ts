@@ -226,8 +226,26 @@ export class MessageService {
     return {
       userId,
       chatId,
+      messageId: cleanMessageId,
       lastReadMessageId: cleanMessageId,
+      readAt: now.toDate().toISOString(),
       lastReadAt: now.toDate().toISOString(),
+    };
+  }
+
+  /**
+   * 4. Mark Message Read
+   * Input: chatId, messageId, userId
+   * Update read receipt in Firestore and PostgreSQL
+   */
+  static async markMessageRead(chatId: string, messageId: string, userId: string) {
+    const receipt = await this.markChatAsRead(chatId, userId, messageId);
+    return {
+      success: true,
+      chatId: receipt.chatId,
+      messageId: receipt.messageId,
+      userId: receipt.userId,
+      readAt: receipt.readAt,
     };
   }
 

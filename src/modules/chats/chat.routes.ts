@@ -4,7 +4,13 @@ import { validateBody, validateParams, validateQuery } from "../../middlewares/v
 import { MessageController } from "../messages/message.controller.js";
 import { getMessagesQuerySchema, markReadSchema, sendMessageSchema } from "../messages/message.schema.js";
 import { ChatController } from "./chat.controller.js";
-import { chatIdParamSchema, createChatSchema, updateLastSeenBodySchema } from "./chat.schema.js";
+import {
+  chatIdParamSchema,
+  createChatSchema,
+  markMessageReadBodySchema,
+  markMessageReadParamsSchema,
+  updateLastSeenBodySchema,
+} from "./chat.schema.js";
 
 export const chatRouter = Router();
 
@@ -48,7 +54,15 @@ chatRouter.get(
   MessageController.getMessages
 );
 
-// Read Receipts
+// 4. Mark Message Read: POST /api/chats/:chatId/message/:messageId/read
+chatRouter.post(
+  "/:chatId/message/:messageId/read",
+  validateParams(markMessageReadParamsSchema),
+  validateBody(markMessageReadBodySchema),
+  MessageController.markMessageRead
+);
+
+// Read Receipts (Legacy)
 chatRouter.post(
   "/:chatId/read",
   validateParams(chatIdParamSchema),
