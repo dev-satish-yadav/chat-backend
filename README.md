@@ -167,22 +167,33 @@ GET http://localhost:3000/health
     "postgresql": { "status": "connected" },
     "firestore": { "status": "connected" }
   },
-  "timestamp": "2026-11-12T19:30:00.000Z"
+  "timestamp": "2026-11-13T08:00:00.000Z"
 }
 ```
 
 ---
 
-## 🎯 Core Chat APIs Specification
+## 🎯 Chat APIs Specification
+
+All chat endpoints are mounted under `/api/chats` in `src/index.ts`:
+
+### Core Specifications (1–6)
 
 | # | Action | Method | Route | Input Payload | Output / Description |
 | :-: | :--- | :--- | :--- | :--- | :--- |
-| **1** | **Create or Get Direct Chat** | `POST` | `/api/chat/create` | Body: `{ "senderId": "uuid", "receiverId": "uuid" }` | Returns `{ "chatId": "uuid" }` from PostgreSQL (prevents duplicates). |
-| **2** | **Send Message** | `POST` | `/api/chat/:chatId/message/send` | Params: `chatId`<br>Body: `{ "senderId": "uuid", "text": "Hello!" }` | Stores message in Firestore with timestamp; updates PostgreSQL snippet. |
-| **3** | **Get Messages** | `GET` | `/api/chat/:chatId/messages?limit=50` | Params: `chatId`<br>Query: `limit` (default 50) | List of messages ordered by timestamp from Firestore. |
-| **4** | **Mark Message as Read** | `POST` | `/api/chat/:chatId/message/:messageId/read` | Params: `chatId`, `messageId`<br>Body: `{ "userId": "uuid" }` | Updates read receipt in Firestore & PostgreSQL (`ChatParticipant`). |
-| **5** | **Update Last Seen** | `POST` | `/api/chat/:chatId/lastseen` | Params: `chatId`<br>Body: `{ "userId": "uuid", "messageId": "string" }` | Updates last seen per user in Firestore & PostgreSQL. |
-| **6** | **Get User Chats** | `GET` | `/api/user/:userId/chats` | Params: `userId` | Returns list of chats with member IDs from relational DB. |
+| **1** | **Create or Get Direct Chat** | `POST` | `/api/chats/create` | Body: `{ "senderId": "uuid", "receiverId": "uuid" }` | Returns `{ "chatId": "uuid" }` from PostgreSQL (prevents duplicate 1:1 chats). |
+| **2** | **Send Message** | `POST` | `/api/chats/:chatId/message/send` | Params: `chatId`<br>Body: `{ "content": "Hello!" }` | Stores message in Firestore with server timestamp; updates PostgreSQL snippet. |
+| **3** | **Get Messages** | `GET` | `/api/chats/:chatId/messages?limit=50` | Params: `chatId`<br>Query: `limit` (default: 50) | Returns chronological list of messages from Firestore with `text`, `content`, and timestamps. |
+| **4** | **Mark Message as Read** | `POST` | `/api/chats/:chatId/message/:messageId/read` | Params: `chatId`, `messageId`<br>Body: `{ "userId": "uuid" }` | Updates message `readBy.{userId}` and `chats/{chatId}/readReceipts/{userId}` in Firestore; syncs PostgreSQL `ChatParticipant`. |
+| **5** | **Update Last Seen** | `POST` | `/api/chats/:chatId/lastseen` | Params: `chatId`<br>Body: `{ "userId": "uuid", "messageId": "string" }` | Updates per-user last seen message in Firestore `chats/{chatId}/lastSeen/{userId}` and syncs PostgreSQL `ChatParticipant`. |
+| **6** | **Get User Chats** | `GET` | `/api/chats` | Auth: Bearer Token | Returns list of chats with member IDs, recipient profiles, and unread flags from relational DB. |
+
+### Bonus Tasks (7–8)
+
+| # | Action | Method | Route | Input Payload | Output / Description |
+| :-: | :--- | :--- | :--- | :--- | :--- |
+| **7** | **Update Message** *(Bonus)* | `PUT` | `/api/chats/:chatId/messages/:messageId` | Params: `chatId`, `messageId`<br>Body: `{ "content": "Updated content" }` | Edits message in Firestore and updates PostgreSQL snippet. (Sender only; supports multiple updates) |
+| **8** | **Delete Message** *(Bonus)* | `DELETE` | `/api/chats/:chatId/messages/:messageId` | Params: `chatId`, `messageId`<br>Query: `?hard=true` (optional) | Delete for everyone. Soft deletes message (default) or permanently deletes if hard=true. (Sender only) |
 
 ---
 
@@ -190,7 +201,8 @@ GET http://localhost:3000/health
 
 ### 1. Create 1:1 Chat
 ```bash
-curl -X POST "http://localhost:3000/api/chat/create" \
+curl -X POST "http://localhost:3000/api/chats/create" \
+  -H "Authorization: Bearer <YOUR_JWT_TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{
     "senderId": "e31fde0b-26b6-40fe-992d-350dbebe4986",
@@ -200,17 +212,67 @@ curl -X POST "http://localhost:3000/api/chat/create" \
 
 ### 2. Send a Message
 ```bash
-curl -X POST "http://localhost:3000/api/chat/9e795f47-f501-4d89-b48d-ea056710f658/message/send" \
+curl -X POST "http://localhost:3000/api/chats/14c6b117-2378-4ae5-80a8-ae1f66c65cd8/message/send" \
+  -H "Authorization: Bearer <YOUR_JWT_TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{
-    "senderId": "e31fde0b-26b6-40fe-992d-350dbebe4986",
-    "text": "Hello! How are you?"
+    "content": "Hello! How are you?"
   }'
 ```
 
-### 3. Fetch Messages
+### 3. Fetch Messages (Default limit = 50)
 ```bash
-curl -X GET "http://localhost:3000/api/chat/9e795f47-f501-4d89-b48d-ea056710f658/messages?limit=50"
+curl -X GET "http://localhost:3000/api/chats/14c6b117-2378-4ae5-80a8-ae1f66c65cd8/messages?limit=50" \
+  -H "Authorization: Bearer <YOUR_JWT_TOKEN>"
+```
+
+### 4. Mark Message as Read
+```bash
+curl -X POST "http://localhost:3000/api/chats/14c6b117-2378-4ae5-80a8-ae1f66c65cd8/message/msg_firestore_id_123/read" \
+  -H "Authorization: Bearer <YOUR_JWT_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": "68dd8fe2-7e71-46db-b665-e89d15e5ea00"
+  }'
+```
+
+### 5. Update Last Seen Message
+```bash
+curl -X POST "http://localhost:3000/api/chats/14c6b117-2378-4ae5-80a8-ae1f66c65cd8/lastseen" \
+  -H "Authorization: Bearer <YOUR_JWT_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": "68dd8fe2-7e71-46db-b665-e89d15e5ea00",
+    "messageId": "msg_firestore_id_123"
+  }'
+```
+
+### 6. List User Chats
+```bash
+curl -X GET "http://localhost:3000/api/chats" \
+  -H "Authorization: Bearer <YOUR_JWT_TOKEN>"
+```
+
+### 7. Update Message Content
+```bash
+curl -X PUT "http://localhost:3000/api/chats/14c6b117-2378-4ae5-80a8-ae1f66c65cd8/messages/msg_firestore_id_123" \
+  -H "Authorization: Bearer <YOUR_JWT_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "Corrected message text!"
+  }'
+```
+
+### 8. Delete Message (Soft Delete)
+```bash
+curl -X DELETE "http://localhost:3000/api/chats/14c6b117-2378-4ae5-80a8-ae1f66c65cd8/messages/msg_firestore_id_123" \
+  -H "Authorization: Bearer <YOUR_JWT_TOKEN>"
+```
+
+### 9. Permanently Delete Message (Hard Delete)
+```bash
+curl -X DELETE "http://localhost:3000/api/chats/14c6b117-2378-4ae5-80a8-ae1f66c65cd8/messages/msg_firestore_id_123?hard=true" \
+  -H "Authorization: Bearer <YOUR_JWT_TOKEN>"
 ```
 
 ---
