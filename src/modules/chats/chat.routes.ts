@@ -2,7 +2,12 @@ import { Router } from "express";
 import { authenticate } from "../../middlewares/auth.middleware.js";
 import { validateBody, validateParams, validateQuery } from "../../middlewares/validate.middleware.js";
 import { MessageController } from "../messages/message.controller.js";
-import { getMessagesQuerySchema, markReadSchema, sendMessageSchema } from "../messages/message.schema.js";
+import {
+  getMessagesQuerySchema,
+  markReadSchema,
+  sendMessageSchema,
+  updateMessageSchema,
+} from "../messages/message.schema.js";
 import { ChatController } from "./chat.controller.js";
 import {
   chatIdParamSchema,
@@ -82,4 +87,19 @@ chatRouter.post(
   validateParams(chatIdParamSchema),
   validateBody(updateLastSeenBodySchema),
   MessageController.updateLastSeen
+);
+
+// Update Message: PUT /api/chats/:chatId/messages/:messageId
+chatRouter.put(
+  "/:chatId/messages/:messageId",
+  validateParams(markMessageReadParamsSchema),
+  validateBody(updateMessageSchema),
+  MessageController.updateMessage
+);
+
+// Delete Message: DELETE /api/chats/:chatId/messages/:messageId
+chatRouter.delete(
+  "/:chatId/messages/:messageId",
+  validateParams(markMessageReadParamsSchema),
+  MessageController.deleteMessage
 );

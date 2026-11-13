@@ -99,4 +99,52 @@ export class MessageController {
       next(error);
     }
   }
+
+  // Update Message: PUT /api/chats/:chatId/messages/:messageId
+  static async updateMessage(req: Request, res: Response, next: NextFunction) {
+    try {
+      const chatId = String(req.params.chatId);
+      const messageId = String(req.params.messageId);
+      const userId = (req.body.userId as string) || req.user?.userId;
+      const content = req.body.content || req.body.text;
+
+      if (!userId) {
+        res.status(400).json({ error: "ValidationError", message: "userId is required." });
+        return;
+      }
+
+      if (!content) {
+        res.status(400).json({
+          error: "ValidationError",
+          message: "Field 'content' is required.",
+        });
+        return;
+      }
+
+      const result = await MessageService.updateMessage(chatId, messageId, userId, content);
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // Delete Message: DELETE /api/chats/:chatId/messages/:messageId
+  static async deleteMessage(req: Request, res: Response, next: NextFunction) {
+    try {
+      const chatId = String(req.params.chatId);
+      const messageId = String(req.params.messageId);
+      const userId = (req.body?.userId as string) || req.user?.userId;
+      const hardDelete = req.query.hard === "true" || req.body?.hard === true;
+
+      if (!userId) {
+        res.status(400).json({ error: "ValidationError", message: "userId is required." });
+        return;
+      }
+
+      const result = await MessageService.deleteMessage(chatId, messageId, userId, hardDelete);
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
 }

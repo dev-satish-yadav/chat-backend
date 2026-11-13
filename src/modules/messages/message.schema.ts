@@ -32,3 +32,14 @@ export const getMessagesQuerySchema = z.object({
 
 export type SendMessageInput = z.infer<typeof sendMessageSchema>;
 export type MarkReadInput = z.infer<typeof markReadSchema>;
+
+export const updateMessageSchema = z.object({
+  content: z
+    .string()
+    .trim()
+    .min(1, "Message content cannot be empty.")
+    .max(4000, "Message content cannot exceed 4000 characters."),
+  userId: z.string().uuid("userId must be a valid UUID.").optional(),
+});
+
+export type UpdateMessageInput = z.infer<typeof updateMessageSchema>;

@@ -2,7 +2,7 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getFirestore } from "../../lib/firebase.js";
 import { prisma } from "../../lib/prisma.js";
 import type { MessageType } from "../../types/index.js";
-import { ForbiddenError, NotFoundError } from "../../utils/errors.js";
+import { BadRequestError, ForbiddenError, NotFoundError } from "../../utils/errors.js";
 
 export class MessageService {
   /**
@@ -335,6 +335,153 @@ export class MessageService {
       userId,
       messageId: cleanMessageId,
       updatedAt: now.toDate().toISOString(),
+    };
+  }
+
+  /**
+   * Update message content in Firestore
+   */
+  static async updateMessage(
+    chatId: string,
+    messageId: string,
+    userId: string,
+    newContent: string
+  ) {
+    await this.assertParticipant(chatId, userId);
+
+    const firestore = getFirestore();
+    const cleanMessageId = messageId.trim();
+    const cleanContent = newContent.trim();
+
+    const messageDocRef = firestore
+      .collection("chats")
+      .doc(chatId)
+      .collection("messages")
+      .doc(cleanMessageId);
+
+    const messageDoc = await messageDocRef.get();
+    if (!messageDoc.exists) {
+      throw new NotFoundError(`Message with ID '${cleanMessageId}' was not found in chat '${chatId}'.`);
+    }
+
+    const messageData = messageDoc.data()!;
+
+    // Verify ownership: only the original sender can edit their message
+    if (messageData.senderId !== userId) {
+      throw new ForbiddenError("Access denied: You can only edit your own messages.");
+    }
+
+    if (messageData.isDeleted) {
+      throw new BadRequestError("Cannot edit a deleted message.");
+    }
+
+    const now = Timestamp.now();
+
+    // 1. Update in Firestore
+    await messageDocRef.update({
+      text: cleanContent,
+      content: cleanContent,
+      isEdited: true,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    // 2. Update relational snippet in PostgreSQL if applicable
+    const snippet = cleanContent.length > 80 ? `${cleanContent.slice(0, 77)}...` : cleanContent;
+    await prisma.chat.updateMany({
+      where: {
+        id: chatId,
+        lastMessageSenderId: userId,
+      },
+      data: {
+        lastMessageSnippet: snippet,
+      },
+    });
+
+    const createdAt =
+      messageData.createdAt instanceof Timestamp
+        ? messageData.createdAt.toDate().toISOString()
+        : messageData.createdAt;
+
+    return {
+      id: cleanMessageId,
+      chatId,
+      senderId: messageData.senderId,
+      text: cleanContent,
+      content: cleanContent,
+      type: messageData.type,
+      isEdited: true,
+      isDeleted: false,
+      createdAt,
+      updatedAt: now.toDate().toISOString(),
+    };
+  }
+
+  /**
+   * Delete message in Firestore (soft delete by default, or hard delete)
+   */
+  static async deleteMessage(
+    chatId: string,
+    messageId: string,
+    userId: string,
+    hardDelete: boolean = false
+  ) {
+    await this.assertParticipant(chatId, userId);
+
+    const firestore = getFirestore();
+    const cleanMessageId = messageId.trim();
+
+    const messageDocRef = firestore
+      .collection("chats")
+      .doc(chatId)
+      .collection("messages")
+      .doc(cleanMessageId);
+
+    const messageDoc = await messageDocRef.get();
+    if (!messageDoc.exists) {
+      throw new NotFoundError(`Message with ID '${cleanMessageId}' was not found in chat '${chatId}'.`);
+    }
+
+    const messageData = messageDoc.data()!;
+
+    // Verify ownership: only the original sender can delete their message
+    if (messageData.senderId !== userId) {
+      throw new ForbiddenError("Access denied: You can only delete your own messages.");
+    }
+
+    const now = Timestamp.now();
+
+    if (hardDelete) {
+      // Hard delete from Firestore collection
+      await messageDocRef.delete();
+    } else {
+      // Soft delete: preserve document, replace text, mark isDeleted
+      await messageDocRef.update({
+        text: "This message was deleted",
+        content: "This message was deleted",
+        isDeleted: true,
+        deletedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
+
+    // Update PostgreSQL lastMessageSnippet if this was the latest message
+    await prisma.chat.updateMany({
+      where: {
+        id: chatId,
+        lastMessageSenderId: userId,
+      },
+      data: {
+        lastMessageSnippet: "This message was deleted",
+      },
+    });
+
+    return {
+      success: true,
+      message: hardDelete ? "Message permanently deleted." : "Message deleted successfully.",
+      chatId,
+      messageId: cleanMessageId,
+      deletedAt: now.toDate().toISOString(),
+      hardDelete,
     };
   }
 }

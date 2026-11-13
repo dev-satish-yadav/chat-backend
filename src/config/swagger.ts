@@ -123,6 +123,14 @@ export const swaggerSpec = {
           userId: { type: "string", format: "uuid", example: "e31fde0b-26b6-40fe-992d-350dbebe4986" },
         },
       },
+      UpdateMessageInput: {
+        type: "object",
+        required: ["content"],
+        properties: {
+          content: { type: "string", example: "Updated message content" },
+          userId: { type: "string", format: "uuid", example: "e31fde0b-26b6-40fe-992d-350dbebe4986" },
+        },
+      },
       PresenceInput: {
         type: "object",
         properties: {
@@ -568,6 +576,96 @@ export const swaggerSpec = {
           400: { description: "Invalid UUID or missing fields" },
           403: { description: "User is not a participant in this chat" },
           404: { description: "Chat, user, or target message not found" },
+        },
+      },
+    },
+    "/api/chats/{chatId}/messages/{messageId}": {
+      put: {
+        summary: "Update Message Content",
+        description: "Updates the content of an existing message in Firestore. Only the original sender can edit their message.",
+        tags: ["Messages"],
+        parameters: [
+          {
+            name: "chatId",
+            in: "path",
+            required: true,
+            schema: { type: "string", format: "uuid" },
+          },
+          {
+            name: "messageId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/UpdateMessageInput" },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: "Message updated successfully",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/Message" },
+              },
+            },
+          },
+          400: { description: "Cannot edit deleted message or invalid input" },
+          403: { description: "Access denied (only the original sender can edit)" },
+          404: { description: "Chat or message not found" },
+        },
+      },
+      delete: {
+        summary: "Delete Message",
+        description: "Deletes a message in Firestore. By default performs a soft delete (preserves chronological flow, text replaced with 'This message was deleted'). Pass ?hard=true for permanent deletion.",
+        tags: ["Messages"],
+        parameters: [
+          {
+            name: "chatId",
+            in: "path",
+            required: true,
+            schema: { type: "string", format: "uuid" },
+          },
+          {
+            name: "messageId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+          {
+            name: "hard",
+            in: "query",
+            required: false,
+            schema: { type: "boolean", default: false },
+            description: "Set to true for permanent hard delete",
+          },
+        ],
+        responses: {
+          200: {
+            description: "Message deleted successfully",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    success: { type: "boolean", example: true },
+                    message: { type: "string", example: "Message deleted successfully." },
+                    chatId: { type: "string", format: "uuid" },
+                    messageId: { type: "string" },
+                    deletedAt: { type: "string", format: "date-time" },
+                    hardDelete: { type: "boolean", example: false },
+                  },
+                },
+              },
+            },
+          },
+          403: { description: "Access denied (only the original sender can delete)" },
+          404: { description: "Chat or message not found" },
         },
       },
     },
